@@ -20,11 +20,15 @@ window.APP_CONFIG = {
   cognitoDomain: "$(Get-Out 'CognitoDomain')"
 };
 "@
-Set-Content -Path "$frontendDir/config.js" -Value $config -Encoding utf8NoBOM
+
+$absolutePath = Join-Path $PSScriptRoot "$frontendDir/config.js"
+[System.IO.File]::WriteAllText($absolutePath, $config)
 
 $zip = "frontend.zip"
 if (Test-Path $zip) { Remove-Item $zip }
-Compress-Archive -Path "$frontendDir/index.html","$frontendDir/config.js" -DestinationPath $zip
+Push-Location $frontendDir
+Compress-Archive -Path "index.html", "config.js" -DestinationPath "../$zip" -Force
+Pop-Location
 
 $dep = aws amplify create-deployment --app-id $appId --branch-name main --region $region | ConvertFrom-Json
 Invoke-RestMethod -Uri $dep.zipUploadUrl -Method Put -InFile $zip -ContentType "application/zip"
