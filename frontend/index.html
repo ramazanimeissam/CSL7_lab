@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Lab Test Scheduler</title>
-  <style>
+  <script src="config.js"></script> <style>
     /* ── CSS VARIABLES ─────────────────────────────── */
     :root{
       --sidebarW: 240px;
@@ -638,21 +638,17 @@
   </div>
 
   <script>
-    /* ════════════════════════════════════════════════
-       CONFIG  –  Woche 6: TRAGT HIER EURE EIGENEN WERTE EIN.
-       Jede Gruppe hat einen eigenen User Pool. Die Werte
-       findet ihr in der Cognito-Konsole (siehe Lab Aufgabe 1).
+/* ════════════════════════════════════════════════
+       CONFIG  –  Dynamische Laufzeit-Konfiguration (Lab 7)
+       Liest die Umgebungsvariablen aus der generierten config.js
        ════════════════════════════════════════════════ */
-    const API_BASE = "https://f1r84vjqbg.execute-api.us-east-1.amazonaws.com";   // z.B. https://abc123.execute-api.us-east-1.amazonaws.com
+    const API_BASE = window.APP_CONFIG?.apiEndpoint || "https://f1r84vjqbg.execute-api.us-east-1.amazonaws.com";
 
     const COGNITO = {
-      // Cognito → User Pool → App integration → Domain (NICHT die User Pool ID!)
-      domain:      "https://us-east-1vrbt2tgz5.auth.us-east-1.amazoncognito.com",
-      // Cognito → User Pool → App integration → App clients
-      clientId:    "3ggihleberujbkc7v4qcp19lo",
-      // Eure Amplify-URL, exakt wie als Callback URL im User Pool hinterlegt (mit / am Ende)
+      domain:      window.APP_CONFIG?.cognitoDomain || "https://us-east-1vrbt2tgz5.auth.us-east-1.amazoncognito.com",
+      clientId:    window.APP_CONFIG?.userPoolClientId || "3ggihleberujbkc7v4qcp19lo",
       redirectUri: window.location.origin + "/",
-      scope:       "email openid phone"
+      scope:       "email openid" // ◄ CRUCIAL: "phone" removed to match AllowedOAuthScopes
     };
 
     document.getElementById("apiBaseDisplay").textContent = API_BASE.replace("https://","");
