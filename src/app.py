@@ -1,12 +1,14 @@
+import os
 import json
 import uuid
 import boto3
-import os
 from boto3.dynamodb.conditions import Key
 from datetime import date
 
+
 TABLE_NAME = os.environ["TABLE_NAME"]
 table = boto3.resource("dynamodb").Table(TABLE_NAME)
+
 
 DEVICES = [
     {"deviceId": "router-1",   "name": "Router 1",   "category": "Routing",    "owners": ["Thomas", "Sarah"], "description": "Core Router Standort A"},
@@ -18,6 +20,7 @@ DEVICES = [
     {"deviceId": "cluster-1",  "name": "Cluster 1",  "category": "Compute",    "owners": ["Marco", "Sarah"],  "description": "Kubernetes Cluster"},
     {"deviceId": "firewall-1", "name": "Firewall 1", "category": "Security",   "owners": ["Thomas", "Marco"], "description": "Perimeter Firewall"},
 ]
+
 
 def respond(status, body):
     return {
@@ -38,11 +41,13 @@ def get_identity(event):
     groups = claims.get("cognito:groups", "")   # z.B. "[admin]" oder ""
     return sub, email, groups
 
+
 def is_admin(groups):
     return groups.strip("[]") == "admin"
 
+
 def lambda_handler(event, context):
-    print(json.dumps(event))   # Woche 6: zeigt in CloudWatch die echte Claim-Struktur
+    print(json.dumps(event))
     method = event["requestContext"]["http"]["method"]
     path = event["rawPath"]
 
@@ -56,13 +61,16 @@ def lambda_handler(event, context):
 
     return respond(404, {"message": f"Route not found: {method} {path}"})
 
+
 def get_devices():
     return respond(200, DEVICES)
+
 
 def get_bookings(event):
     week = event["queryStringParameters"]["week"]
     result = table.query(KeyConditionExpression=Key("calendarWeek").eq(week))
     return respond(200, result.get("Items", []))
+
 
 def create_booking(event):
     sub, email, groups = get_identity(event)
@@ -99,6 +107,7 @@ def delete_booking(event, path):
 
     table.delete_item(Key={"calendarWeek": week, "bookingId": booking_id})
     return respond(200, {"deleted": booking_id})
+
 
 def get_calendar_week(date_str):
     # ============================================================
