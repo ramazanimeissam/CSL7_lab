@@ -1,0 +1,43 @@
+name: Deploy Frontend (Amplify)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      # TODO D: Diese Pipeline soll NUR bei Frontend-Aenderungen laufen. Filtert auf frontend/**
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: AWS-Credentials konfigurieren
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      # GEGEBEN: config.js aus den Stack-Outputs erzeugen und zu Amplify pushen.
+      # Kein GitHub-Token, der Push nutzt die AWS-Credentials von oben.
+      - name: Frontend zu Amplify deployen
+        run: |
+          get_out() { aws cloudformation describe-stacks --stack-name netlab-scheduler --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+          APP_ID=$(get_out AmplifyAppId)
+          cat > frontend/config.js <<CFG
+          window.APP_CONFIG = {
+            apiEndpoint: "$(get_out ApiEndpoint)",
+            userPoolId: "$(get_out UserPoolId)",
+            userPoolClientId: "$(get_out UserPoolClientId)",
+            cognitoDomain: "$(get_out CognitoDomain)"
+          };
+          CFG
+          cd frontend && zip -r ../frontend.zip . -x config.example.js && cd ..
+          DEP=$(aws amplify create-deployment --app-id "$APP_ID" --branch-name main)
+          ZIP_URL=$(echo "$DEP" | jq -r .zipUploadUrl)
+          JOB_ID=$(echo "$DEP" | jq -r .jobId)
+          curl -H "Content-Type: application/zip" --upload-file frontend.zip "$ZIP_URL"
+          aws amplify start-deployment --app-id "$APP_ID" --branch-name main --job-id "$JOB_ID"

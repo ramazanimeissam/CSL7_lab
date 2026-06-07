@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetLab Scheduler</title>
+<script src="config.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; }
+  h1 { color: #00008E; }
+  button { background: #E9106B; color: #fff; border: 0; padding: .6rem 1rem; border-radius: 6px; cursor: pointer; }
+  button.secondary { background: #00008E; }
+  .card { border: 1px solid #BAE0E3; border-radius: 8px; padding: 1rem; margin: .5rem 0; }
+  label { display: block; margin: .4rem 0 .1rem; font-size: .9rem; }
+  input { width: 100%; padding: .4rem; box-sizing: border-box; }
+  .row { display: flex; gap: .5rem; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>NetLab Scheduler</h1>
+
+<div id="login-view">
+  <p>Bitte einloggen, um Buchungen zu sehen.</p>
+  <button onclick="login()">Login</button>
+</div>
+
+<div id="app-view" class="hidden">
+  <p>Angemeldet als <b id="who"></b> <button class="secondary" onclick="logout()">Logout</button></p>
+  <div class="card">
+    <h3>Neue Buchung</h3>
+    <label>Start-Datum</label><input id="startDate" type="date" value="2026-05-12">
+    <div class="row">
+      <div style="flex:1"><label>Start-Slot</label><input id="startSlot" value="AM"></div>
+      <div style="flex:1"><label>End-Slot</label><input id="endSlot" value="PM"></div>
+    </div>
+    <label>Geraete (kommagetrennt)</label><input id="deviceIds" value="router-1">
+    <label>Beschreibung</label><input id="desc" value="Wartung Router 1">
+    <p><button onclick="createBooking()">Buchung anlegen</button></p>
+  </div>
+  <div class="card">
+    <h3>Buchungen der Woche</h3>
+    <input id="week" value="2026-W20"> <button onclick="loadWeek()">Laden</button>
+    <div id="bookings"></div>
+  </div>
+</div>
+
+<script>
+const cfg = window.APP_CONFIG;
+const redirectUri = window.location.origin;   // kein localhost, kein hartcodierter Wert
+
+function b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function sha256(s){ return await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
+function rand(){ const a = new Uint8Array(32); crypto.getRandomValues(a); return b64url(a); }
+
+async function login(){
+  const verifier = rand();
+  sessionStorage.setItem('pkce_verifier', verifier);
+  const challenge = b64url(await sha256(verifier));
+  const u = new URL(cfg.cognitoDomain + '/oauth2/authorize');
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('client_id', cfg.userPoolClientId);
+  u.searchParams.set('redirect_uri', redirectUri);
+  u.searchParams.set('scope', 'openid email');
+  u.searchParams.set('code_challenge', challenge);
+  u.searchParams.set('code_challenge_method', 'S256');
+  window.location = u.toString();
+}
+
+function logout(){
+  sessionStorage.clear();
+  const u = new URL(cfg.cognitoDomain + '/logout');
+  u.searchParams.set('client_id', cfg.userPoolClientId);
+  u.searchParams.set('logout_uri', redirectUri);
+  window.location = u.toString();
+}
+
+async function exchangeCode(code){
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const body = new URLSearchParams({ grant_type:'authorization_code', client_id:cfg.userPoolClientId, code, redirect_uri:redirectUri, code_verifier:verifier });
+  const r = await fetch(cfg.cognitoDomain + '/oauth2/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+  const t = await r.json();
+  if (t.id_token) sessionStorage.setItem('id_token', t.id_token);
+  history.replaceState({}, '', redirectUri);
+}
+
+function token(){ return sessionStorage.getItem('id_token'); }
+
+async function api(path, opts={}){
+  const r = await fetch(cfg.apiEndpoint + path, { ...opts, headers:{ 'Authorization':'Bearer '+token(), 'Content-Type':'application/json', ...(opts.headers||{}) } });
+  return r.json();
+}
+
+async function createBooking(){
+  const body = {
+    startDate: document.getElementById('startDate').value,
+    startSlot: document.getElementById('startSlot').value,
+    endDate: document.getElementById('startDate').value,
+    endSlot: document.getElementById('endSlot').value,
+    deviceIds: document.getElementById('deviceIds').value.split(',').map(s => s.trim()),
+    desc: document.getElementById('desc').value
+  };
+  await api('/bookings', { method:'POST', body: JSON.stringify(body) });
+  loadWeek();
+}
+
+async function loadWeek(){
+  const week = document.getElementById('week').value;
+  const items = await api('/bookings?week=' + encodeURIComponent(week));
+  const el = document.getElementById('bookings');
+  el.innerHTML = (Array.isArray(items) && items.length)
+    ? items.map(b => '<div class="card"><b>' + (b.desc||'') + '</b><br>' + b.startDate + ' ' + b.startSlot + ' bis ' + b.endDate + ' ' + b.endSlot + '<br>Geraete: ' + (b.deviceIds||[]).join(', ') + '</div>').join('')
+    : '<p>Keine Buchungen.</p>';
+}
+
+function claimsFromToken(){
+  try { return JSON.parse(atob(token().split('.')[1])); } catch(e){ return {}; }
+}
+
+async function init(){
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('code')) await exchangeCode(params.get('code'));
+  if (token()){
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('app-view').classList.remove('hidden');
+    const c = claimsFromToken();
+    document.getElementById('who').textContent = c['cognito:username'] || c.email || 'user';
+    loadWeek();
+  }
+}
+init();
+</script>
+</body>
+</html>

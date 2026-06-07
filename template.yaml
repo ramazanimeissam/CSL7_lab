@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: NetLab Scheduler - Woche 7 - STARTER
+
+Globals:
+  Function:
+    # TODO 1: Setzt Runtime (python3.12) und Timeout (10) einmal global.
+    #         Frage: Warum global statt bei jeder Funktion?
+
+Resources:
+
+  SchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      # TODO 2: Verweist mit Role direkt auf die vorhandene LabRole.
+      #         ARN mit !Sub und ${AWS::AccountId} bauen. KEIN Policies-Block!
+      Environment:
+        Variables:
+          # TODO 3: Setzt TABLE_NAME auf den Namen der Tabelle. Tipp: !Ref BookingsTable
+      Events:
+        DefaultRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref SchedulerApi
+        # TODO 4: Ergaenzt eine OPTIONS /{proxy+}-Route OHNE Authorizer
+        #         (Auth: { Authorizer: NONE }), damit der CORS-Preflight durchkommt.
+
+  # TODO 5: Definiert die DynamoDB-Tabelle als AWS::DynamoDB::Table mit
+  #         calendarWeek als HASH und bookingId als RANGE (beide Typ S),
+  #         BillingMode PAY_PER_REQUEST. Frage: Warum keine SimpleTable?
+  BookingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      # ... ausfuellen ...
+
+  SchedulerApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+              audience:
+                - !Ref UserPoolClient
+        DefaultAuthorizer: CognitoAuthorizer
+
+  # ==== GEGEBEN: Frontend-Hosting (Amplify) ==============================
+  # Kein Repository, kein GitHub-Token. Die Pipeline pusht die Dateien per CLI.
+  # Die App existiert nach sam deploy mit einer festen URL.
+  FrontendApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: netlab-scheduler-frontend
+      Platform: WEB
+
+  FrontendBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt FrontendApp.AppId
+      BranchName: main
+
+  # ==== GEGEBEN: Cognito =================================================
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: netlab-scheduler-pool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Sub "netlab-scheduler-${AWS::AccountId}"
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: netlab-scheduler-client
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+      AllowedOAuthFlowsUserPoolClient: true
+      SupportedIdentityProviders:
+        - COGNITO
+      # Callback wird aus der Amplify-App abgeleitet (.AppId, NICHT der ARN).
+      # Kein localhost, keine zweite Deploy-Phase.
+      CallbackURLs:
+        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
+      LogoutURLs:
+        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+      Description: Administratoren mit erweiterten Rechten
+
+  ThomasUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref UserPool
+      Username: thomas
+      MessageAction: SUPPRESS
+      UserAttributes:
+        - Name: email
+          Value: thomas@netlab.local
+        - Name: email_verified
+          Value: "true"
+
+  MariaUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref UserPool
+      Username: maria
+      MessageAction: SUPPRESS
+      UserAttributes:
+        - Name: email
+          Value: maria@netlab.local
+        - Name: email_verified
+          Value: "true"
+
+  MariaAdminMembership:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    DependsOn: MariaUser
+    Properties:
+      GroupName: !Ref AdminGroup
+      Username: maria
+      UserPoolId: !Ref UserPool
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub "https://${SchedulerApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  CognitoDomain:
+    Value: !Sub "https://netlab-scheduler-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com"
+  AmplifyAppId:
+    Value: !GetAtt FrontendApp.AppId
+  FrontendUrl:
+    Value: !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"

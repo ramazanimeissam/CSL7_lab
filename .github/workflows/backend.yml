@@ -1,0 +1,33 @@
+name: Deploy Backend (SAM)
+
+# TODO A: Trigger. Diese Pipeline soll NUR bei Backend-Aenderungen laufen.
+#         Push auf main, gefiltert mit paths auf: template.yaml, samconfig.toml, src/**
+on:
+  push:
+    branches: [ main ]
+    paths:
+      # ... ausfuellen ...
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: SAM CLI installieren
+        run: pip install aws-sam-cli
+
+      # TODO B: AWS-Credentials. aws-actions/configure-aws-credentials@v4 mit den
+      #         DREI Secrets (Access Key, Secret Key, Session Token), Region us-east-1.
+
+      - name: SAM build
+        run: sam build
+
+      # TODO C: SAM deploy nicht-interaktiv (kein Changeset bestaetigen lassen):
+      #         sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
