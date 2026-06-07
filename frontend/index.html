@@ -1,134 +1,1449 @@
-<!DOCTYPE html>
-<html lang="de">
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NetLab Scheduler</title>
-<script src="config.js"></script>
-<style>
-  body { font-family: Arial, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; }
-  h1 { color: #00008E; }
-  button { background: #E9106B; color: #fff; border: 0; padding: .6rem 1rem; border-radius: 6px; cursor: pointer; }
-  button.secondary { background: #00008E; }
-  .card { border: 1px solid #BAE0E3; border-radius: 8px; padding: 1rem; margin: .5rem 0; }
-  label { display: block; margin: .4rem 0 .1rem; font-size: .9rem; }
-  input { width: 100%; padding: .4rem; box-sizing: border-box; }
-  .row { display: flex; gap: .5rem; }
-  .hidden { display: none; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lab Test Scheduler</title>
+  <style>
+    /* ── CSS VARIABLES ─────────────────────────────── */
+    :root{
+      --sidebarW: 240px;
+      --headerH:  64px;
+
+      --bg:          #0b0c10;
+      --solidBar:    #10131a;
+      --solidBar2:   #151a24;
+      --panelSolid:  #10131a;
+
+      --text:   #e9edf1;
+      --muted:  #9aa6b2;
+      --line:   rgba(255,255,255,.12);
+      --shadow: 0 10px 30px rgba(0,0,0,.38);
+      --radius: 14px;
+
+      --btnBg:           rgba(255,255,255,.06);
+      --btnBgHover:      rgba(255,255,255,.10);
+      --btnPrimaryBg:    rgba(120,180,255,.18);
+      --btnPrimaryBorder:rgba(120,180,255,.35);
+
+      --matrixHeadSolid:      #10131a;
+      --matrixHeadSolid2:     #151a24;
+      --matrixStickyColSolid: #10131a;
+
+      --tagBg: rgba(255,255,255,.06);
+
+      --todayFill: rgba(255,220,120,.14);
+      --todayRing: rgba(255,220,120,.70);
+
+      /* Booking status colors */
+      --stConfirmed:    rgba(120,180,255,.22);
+      --stConfirmedB:   rgba(120,180,255,.44);
+      --stInProgress:   rgba(255,200,60,.24);
+      --stInProgressB:  rgba(255,200,60,.46);
+      --stCompleted:    rgba(40,200,120,.18);
+      --stCompletedB:   rgba(40,200,120,.38);
+      --stCancelled:    rgba(190,195,205,.12);
+      --stCancelledB:   rgba(190,195,205,.28);
+
+      /* Row group alternating colors */
+      --gA0:#261823; --gB0:#1f141c;
+      --gA1:#2a2114; --gB1:#221a10;
+      --gA2:#252a14; --gB2:#1f2210;
+      --gA3:#142a20; --gB3:#102219;
+      --gA4:#14202a; --gB4:#101922;
+      --gA5:#23142a; --gB5:#1c1022;
+      --gA6:#2a1430; --gB6:#221026;
+      --gA7:#142a2a; --gB7:#102222;
+      --gBorder: rgba(255,255,255,.10);
+
+      --resCatW:  120px;
+      --resNameW: 200px;
+      --resSlotW:  84px;
+    }
+
+
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      height: 100%; width: 100%;
+      margin: 0; padding: 0;
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── LAYOUT ────────────────────────────────────── */
+    .app {
+      width: 100vw; height: 100vh;
+      display: grid;
+      grid-template-columns: var(--sidebarW) 1fr;
+      grid-template-rows: var(--headerH) 1fr;
+      overflow: hidden;
+    }
+
+    aside {
+      grid-column: 1; grid-row: 1 / span 2;
+      border-right: 1px solid var(--line);
+      background: var(--panelSolid);
+      padding: 14px 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      overflow: auto; min-height: 0;
+    }
+
+    header.mainHeader {
+      grid-column: 2; grid-row: 1;
+      height: var(--headerH);
+      background: var(--solidBar);
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; overflow: hidden;
+    }
+
+    main {
+      grid-column: 2; grid-row: 2;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      display: flex; flex-direction: column; min-height: 0;
+    }
+
+    .content {
+      height: 100%; width: 100%;
+      overflow: auto; padding: 12px;
+      display: flex; flex-direction: column; gap: 12px; min-height: 0;
+    }
+
+    #weekHost, #resourcesHost { flex: 1 1 auto; min-height: 0; display: flex; }
+
+    /* ── TOPBAR ────────────────────────────────────── */
+    .topbar {
+      width: 100%; padding: 10px 16px;
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .title { display: flex; align-items: center; gap: 10px; }
+    .title h1 { font-size: 16px; margin: 0; letter-spacing: .2px; font-weight: 900; }
+    .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+    /* ── BUTTONS ───────────────────────────────────── */
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--btnBg);
+      color: var(--text);
+      padding: 9px 10px;
+      border-radius: 12px;
+      cursor: pointer; font-weight: 800; font-size: 13px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      user-select: none; white-space: nowrap;
+    }
+    button:hover { background: var(--btnBgHover); }
+    button:active { transform: translateY(1px); }
+    button.primary { background: var(--btnPrimaryBg); border-color: var(--btnPrimaryBorder); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    .keyHint {
+      font-size: 11px; color: var(--muted);
+      border: 1px solid var(--line); padding: 2px 8px;
+      border-radius: 999px; background: transparent;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── SIDEBAR ───────────────────────────────────── */
+    .sideTitle { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 10px; }
+    .sideTitle .t { font-weight: 900; letter-spacing: .2px; font-size: 14px; margin: 0; }
+    .sideGroup { display: flex; flex-direction: column; gap: 8px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 14px; }
+
+    /* ── WEEKLY VIEW ───────────────────────────────── */
+    .week, .resourcesWrap {
+      width: 100%; height: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: var(--panelSolid);
+      display: flex; flex-direction: column; min-height: 0;
+    }
+
+    .weekHeader {
+      padding: 10px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--solidBar2);
+      border-bottom: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    .weekHeader .wk    { font-weight: 900; font-size: 13px; letter-spacing: .2px; }
+    .weekHeader .range { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .weekHeader .right { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+    .days {
+      flex: 1 1 auto; min-height: 0;
+      display: grid; grid-template-columns: repeat(7, minmax(0,1fr));
+      gap: 1px; background: var(--line);
+    }
+
+    .day {
+      background: var(--panelSolid);
+      display: flex; flex-direction: column;
+      position: relative; overflow: hidden; min-height: 0;
+    }
+    .day.today {
+      background: linear-gradient(180deg, var(--todayFill), var(--panelSolid));
+      outline: 2px solid var(--todayRing); outline-offset: -2px;
+    }
+
+    .dayTop {
+      padding: 24px 8px 6px;
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 6px;
+      background: var(--solidBar2); position: relative; min-height: 48px; flex: 0 0 auto;
+    }
+
+    .dowWrap { position: relative; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+
+    .todayBadge {
+      position: absolute; top: -18px; left: 0;
+      font-size: 10px; font-weight: 900; padding: 4px 7px; border-radius: 999px;
+      background: #3b2f11; border: 1px solid rgba(255,220,120,.55); color: rgba(255,240,205,.98);
+      display: none; pointer-events: none; white-space: nowrap; line-height: 1;
+    }
+    .day.today .todayBadge { display: inline-block; }
+
+    .dow  { font-weight: 900; font-size: 12px; letter-spacing: .2px; }
+    .date { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-bottom: 1px; }
+
+    .blocks { padding: 8px; display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+
+    .block {
+      flex: 1 1 0; min-height: 0;
+      border: 1px solid var(--line); border-radius: 12px; padding: 8px;
+      background: rgba(120,180,255,.07);
+      box-shadow: 0 2px 12px rgba(0,0,0,.16);
+      display: flex; flex-direction: column; gap: 6px; overflow: hidden;
+    }
+    .block.pm { background: rgba(120,255,200,.06); }
+
+    .blockHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 auto; }
+    .blabel { font-weight: 900; font-size: 11px; letter-spacing: .2px; }
+    .btime  { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .pause { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; padding: 0 2px; flex: 0 0 auto; }
+    .pause .pline { height: 1px; background: var(--line); flex: 1; }
+    .pause .ptxt  { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .items { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; padding-right: 2px; }
+    .empty { color: rgba(154,166,178,.85); font-size: 12px; padding: 2px; }
+
+    .item {
+      border-radius: 10px; padding: 7px;
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      border: 1px solid var(--line); overflow: hidden;
+      background: transparent; cursor: pointer; flex: 0 0 auto;
+    }
+    .item.st-confirmed   { background: var(--stConfirmed);  border-color: var(--stConfirmedB);  }
+    .item.st-in-progress { background: var(--stInProgress); border-color: var(--stInProgressB); }
+    .item.st-completed   { background: var(--stCompleted);  border-color: var(--stCompletedB);  }
+    .item.st-cancelled   { background: var(--stCancelled);  border-color: var(--stCancelledB); opacity: .65; }
+
+    .itemMain { min-width: 0; flex: 1 1 auto; }
+    .itemDesc { font-size: 12px; font-weight: 400; line-height: 1.2; overflow-wrap: anywhere; word-break: break-word; }
+
+    .itemActions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+    .miniDel {
+      appearance: none; border: 1px solid var(--line); background: rgba(0,0,0,.12);
+      color: var(--text); width: 28px; height: 26px; border-radius: 10px;
+      cursor: pointer; font-weight: 900; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; user-select: none;
+    }
+    .miniDel:hover { background: rgba(0,0,0,.22); }
+
+    /* ── RESOURCES MATRIX ──────────────────────────── */
+    .resourcesWrap {
+      width: 100%; height: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: var(--panelSolid);
+      display: flex; flex-direction: column; min-height: 0;
+    }
+
+    .matrixScroll {
+      flex: 1 1 auto; min-height: 0;
+      overflow: auto;
+      background: var(--panelSolid);
+      position: relative;
+    }
+
+    table.matrix {
+      width: 100%;
+      border-collapse: separate; border-spacing: 0;
+      table-layout: fixed;
+      font-size: 10px;
+      --theadRow1H: 32px;
+      --theadRow2H: 28px;
+    }
+
+    .matrix th, .matrix td {
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 4px;
+      vertical-align: middle; text-align: center;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .matrix thead tr:nth-child(1) th { position: sticky; top: 0; z-index: 14; background: var(--matrixHeadSolid); }
+    .matrix thead tr:nth-child(2) th { position: sticky; top: var(--theadRow1H); z-index: 13; background: var(--matrixHeadSolid2); }
+
+    .matrix .stickyColA {
+      position: sticky; left: 0; z-index: 16;
+      background: var(--matrixStickyColSolid);
+      font-weight: 900; text-align: left; padding-left: 8px;
+      width: var(--resCatW); min-width: var(--resCatW); max-width: var(--resCatW);
+      white-space: normal; overflow: hidden; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15;
+    }
+    .matrix .stickyColB {
+      position: sticky; left: var(--resCatW); z-index: 15;
+      background: var(--matrixStickyColSolid);
+      font-weight: 900; text-align: left; padding-left: 8px;
+      width: var(--resNameW); min-width: var(--resNameW); max-width: var(--resNameW);
+      white-space: normal; overflow: hidden; overflow-wrap: anywhere; word-break: break-word; line-height: 1.15;
+    }
+
+    .matrix .dayHead { font-weight: 900; font-size: 10px; }
+    .matrix .slotHead { font-weight: 900; color: var(--muted); font-size: 9px; }
+    .matrix .cell { height: 40px; font-weight: 900; font-size: 10px; letter-spacing: .1px; padding: 4px; }
+    .matrix .todayCol { background: linear-gradient(180deg, var(--todayFill), transparent) !important; }
+
+    .dayHeadWrap { position: relative; padding-top: 18px; line-height: 1.05; }
+    .dayHeadWrap .todayInHeader {
+      position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
+      font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 999px;
+      white-space: nowrap; pointer-events: none;
+      background: #3b2f11; border: 1px solid rgba(255,220,120,.55); color: rgba(255,240,205,.98);
+    }
+
+
+    /* Group row colors */
+    .groupA0 td { background: var(--gA0); } .groupB0 td { background: var(--gB0); }
+    .groupA1 td { background: var(--gA1); } .groupB1 td { background: var(--gB1); }
+    .groupA2 td { background: var(--gA2); } .groupB2 td { background: var(--gB2); }
+    .groupA3 td { background: var(--gA3); } .groupB3 td { background: var(--gB3); }
+    .groupA4 td { background: var(--gA4); } .groupB4 td { background: var(--gB4); }
+    .groupA5 td { background: var(--gA5); } .groupB5 td { background: var(--gB5); }
+    .groupA6 td { background: var(--gA6); } .groupB6 td { background: var(--gB6); }
+    .groupA7 td { background: var(--gA7); } .groupB7 td { background: var(--gB7); }
+    .matrix tbody tr td { border-bottom-color: var(--gBorder); }
+    .matrix tbody tr td.stickyColA,
+    .matrix tbody tr td.stickyColB { background: inherit !important; }
+
+    .cellStack { display: flex; flex-direction: column; gap: 2px; align-items: stretch; justify-content: center; }
+    .cellEntry {
+      border-radius: 10px; border: 1px solid var(--line);
+      padding: 6px 7px; text-align: left; cursor: pointer; user-select: none;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      font-weight: 400; font-size: 10px; line-height: 1.15; background: transparent;
+    }
+    .cellEntry.st-confirmed   { background: var(--stConfirmed);  border-color: var(--stConfirmedB);  }
+    .cellEntry.st-in-progress { background: var(--stInProgress); border-color: var(--stInProgressB); }
+    .cellEntry.st-completed   { background: var(--stCompleted);  border-color: var(--stCompletedB);  }
+    .cellEntry.st-cancelled   { background: var(--stCancelled);  border-color: var(--stCancelledB); opacity: .55; }
+    .cellMore { font-size: 9px; color: var(--muted); font-weight: 900; text-align: left; padding-left: 2px; user-select: none; }
+
+    /* ── MODALS ────────────────────────────────────── */
+    .modalBackdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none; align-items: center; justify-content: center;
+      padding: 16px; z-index: 1000;
+    }
+
+    .modalBackdrop.show { display: flex; }
+
+    .modal {
+      width: min(860px, 100%);
+      border-radius: 16px; border: 1px solid var(--line);
+      background: var(--panelSolid);
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+      overflow: hidden; max-height: 92vh;
+      display: flex; flex-direction: column;
+    }
+
+    .modalHeader {
+      padding: 14px 14px 12px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--solidBar2); flex: 0 0 auto;
+    }
+    .modalHeader .h { display: flex; flex-direction: column; gap: 2px; }
+    .modalHeader .h .t { font-size: 14px; font-weight: 900; letter-spacing: .2px; }
+    .modalHeader .h .s { font-size: 12px; color: var(--muted); }
+
+    .modalBody { padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow: auto; min-height: 0; }
+
+    .modalFooter {
+      padding: 12px 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      border-top: 1px solid var(--line);
+      background: var(--solidBar2); flex: 0 0 auto;
+    }
+    .err { font-size: 12px; color: rgba(255,140,140,.95); min-height: 16px; }
+    .btnRow { display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
+    .row  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+
+    label { font-size: 12px; font-weight: 900; display: flex; flex-direction: column; gap: 6px; }
+
+    input[type="date"], input[type="text"], textarea {
+      width: 100%; color: var(--text);
+      background: transparent;
+      border: 1px solid var(--line); border-radius: 12px;
+      padding: 10px; font-size: 13px; outline: none;
+    }
+    textarea { min-height: 64px; resize: vertical; line-height: 1.35; }
+
+    .slotRow {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+      padding: 10px; border-radius: 12px;
+      border: 1px solid var(--line); background: transparent;
+    }
+    .slotRow .slotLabel { font-size: 12px; font-weight: 900; margin-right: 2px; }
+    .radioLine { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; }
+
+    .pickerBox { border: 1px solid var(--line); background: transparent; border-radius: 12px; padding: 10px; }
+    .pickerTitle { font-size: 12px; font-weight: 900; margin: 0 0 8px; }
+
+    .tokenWrap { display: flex; flex-wrap: wrap; gap: 6px; }
+    .token {
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 4px 10px; font-size: 12px; font-weight: 900;
+      cursor: pointer; background: transparent; user-select: none;
+    }
+    .token.on { background: var(--btnPrimaryBg); border-color: var(--btnPrimaryBorder); }
+
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--tagBg);
+      font-size: 11px; font-weight: 900; color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .conflictBox {
+      display: none;
+      border: 1px solid rgba(255,90,90,.45);
+      background: rgba(255,90,90,.10);
+      border-radius: 12px; padding: 12px;
+    }
+    .conflictBox .conflictTitle { font-weight: 900; font-size: 12px; color: rgba(255,140,140,.95); margin-bottom: 6px; }
+    .conflictBox .conflictMsg  { font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+
+    @media (max-width: 820px){
+      :root { --sidebarW: 1fr; --headerH: auto; }
+      .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+      aside { grid-column: 1; grid-row: 1; border-right: none; border-bottom: 1px solid var(--line); }
+      header.mainHeader { grid-column: 1; grid-row: 2; height: auto; }
+      main { grid-column: 1; grid-row: 3; }
+      .row, .row4 { grid-template-columns: 1fr; }
+      .controls { justify-content: flex-start; }
+    }
+  </style>
 </head>
+
 <body>
-<h1>NetLab Scheduler</h1>
+  <div class="app">
 
-<div id="login-view">
-  <p>Bitte einloggen, um Buchungen zu sehen.</p>
-  <button onclick="login()">Login</button>
-</div>
+    <!-- ── SIDEBAR ── -->
+    <aside>
+      <div class="sideTitle">
+        <div class="t">Lab Scheduler</div>
+      </div>
 
-<div id="app-view" class="hidden">
-  <p>Angemeldet als <b id="who"></b> <button class="secondary" onclick="logout()">Logout</button></p>
-  <div class="card">
-    <h3>Neue Buchung</h3>
-    <label>Start-Datum</label><input id="startDate" type="date" value="2026-05-12">
-    <div class="row">
-      <div style="flex:1"><label>Start-Slot</label><input id="startSlot" value="AM"></div>
-      <div style="flex:1"><label>End-Slot</label><input id="endSlot" value="PM"></div>
+      <div class="sideGroup">
+        <button id="swapViewBtn" type="button">
+          <span id="swapViewText">Resources overview</span>
+          <span class="keyHint">R</span>
+        </button>
+
+        <button id="addEntryBtn" type="button" class="primary">
+          <span>Book slot</span>
+          <span class="keyHint">A</span>
+        </button>
+      </div>
+
+      <div style="margin-top: auto; padding: 6px; color: var(--muted); font-size: 11px; display: flex; flex-direction: column; gap: 10px;">
+
+        <div>
+          <div style="font-weight:900; margin-bottom:4px; color:var(--text);">API</div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span id="apiStatusDot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;flex-shrink:0;"></span>
+            <span id="apiStatusText">Connecting…</span>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-weight:900; margin-bottom:4px; color:var(--text);">Status</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--stConfirmed);border:1px solid var(--stConfirmedB);display:inline-block;"></span>Confirmed</div>
+            <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--stInProgress);border:1px solid var(--stInProgressB);display:inline-block;"></span>In progress</div>
+            <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--stCompleted);border:1px solid var(--stCompletedB);display:inline-block;"></span>Completed</div>
+            <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:var(--stCancelled);border:1px solid var(--stCancelledB);display:inline-block;"></span>Cancelled</div>
+          </div>
+        </div>
+
+        <div id="apiBaseDisplay" style="word-break:break-all;"></div>
+
+      </div>
+    </aside>
+
+    <!-- ── HEADER ── -->
+    <header class="mainHeader">
+      <div class="topbar">
+        <div class="title">
+          <h1>Resources Overview</h1>
+        </div>
+        <div class="controls">
+          <button id="prevWeekBtn" type="button">← Previous week</button>
+          <button id="todayBtn"    type="button">Today</button>
+          <button id="nextWeekBtn" type="button">Next week →</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── MAIN ── -->
+    <main>
+      <div class="content">
+        <div id="weekHost"></div>
+        <div id="resourcesHost" style="display:none;"></div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ── BOOK / EDIT MODAL ── -->
+  <div id="entryModalBackdrop" class="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modalHeader">
+        <div class="h">
+          <div class="t" id="entryModalTitle">Book a test slot</div>
+          <div class="s" id="entryModalSub">Conflicts are checked automatically against the device dependency graph.</div>
+        </div>
+        <button id="closeEntryModalBtn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <label>
+          Your name
+          <input id="engineerNameInput" type="text"/>
+        </label>
+
+        <label>
+          Test name
+          <textarea id="descInput" placeholder="Describe the test briefly…"></textarea>
+        </label>
+
+        <label>
+          Notes (optional)
+          <textarea id="detailsInput" placeholder="Extra details, ticket number, etc."></textarea>
+        </label>
+
+        <div class="row4">
+          <label>
+            Start date
+            <input id="startDateInput" type="date" />
+          </label>
+          <div class="slotRow">
+            <div class="slotLabel">Start slot</div>
+            <label class="radioLine"><input type="radio" name="startSlot" value="am" checked /> AM</label>
+            <label class="radioLine"><input type="radio" name="startSlot" value="pm" /> PM</label>
+          </div>
+          <label>
+            End date
+            <input id="endDateInput" type="date" />
+          </label>
+          <div class="slotRow">
+            <div class="slotLabel">End slot</div>
+            <label class="radioLine"><input type="radio" name="endSlot" value="am" /> AM</label>
+            <label class="radioLine"><input type="radio" name="endSlot" value="pm" checked /> PM</label>
+          </div>
+        </div>
+
+        <div class="pickerBox">
+          <div class="pickerTitle">Device(s)</div>
+          <div class="row" style="grid-template-columns: 1fr auto; gap: 8px;">
+            <input id="deviceFilterInput" type="text" placeholder="Filter by name or category…" />
+            <button id="addDeviceToSelectionBtn" type="button">Add</button>
+          </div>
+          <div id="deviceTokenWrap" class="tokenWrap" style="margin-top:10px;"></div>
+          <div id="devicePickWrap" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="conflictBox" id="conflictBox">
+          <div class="conflictTitle">⚠ Conflict detected</div>
+          <div class="conflictMsg" id="conflictMsg"></div>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <div class="err" id="entryErrMsg"></div>
+        <div class="btnRow">
+          <button id="deleteEntryBtn" type="button" style="display:none;">Cancel booking</button>
+          <button id="cancelEntryBtn" type="button">Close</button>
+          <button id="saveEntryBtn"   type="button" class="primary">Save</button>
+        </div>
+      </div>
     </div>
-    <label>Geraete (kommagetrennt)</label><input id="deviceIds" value="router-1">
-    <label>Beschreibung</label><input id="desc" value="Wartung Router 1">
-    <p><button onclick="createBooking()">Buchung anlegen</button></p>
   </div>
-  <div class="card">
-    <h3>Buchungen der Woche</h3>
-    <input id="week" value="2026-W20"> <button onclick="loadWeek()">Laden</button>
-    <div id="bookings"></div>
+
+  <!-- ── VIEW MODAL ── -->
+  <div id="viewModalBackdrop" class="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal" style="width:min(640px,100%);">
+      <div class="modalHeader">
+        <div class="h">
+          <div class="t">Booking details</div>
+          <div id="viewModalSub" class="s"></div>
+        </div>
+        <button id="closeViewModalBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody" id="viewBody"></div>
+      <div class="modalFooter">
+        <div></div>
+        <div class="btnRow">
+          <button id="editFromViewBtn" type="button" class="primary">Edit</button>
+          <button id="closeViewBtn"    type="button">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
-</div>
 
-<script>
-const cfg = window.APP_CONFIG;
-const redirectUri = window.location.origin;   // kein localhost, kein hartcodierter Wert
+  <!-- ── PICK MODAL (multiple bookings in one cell) ── -->
+  <div id="pickModalBackdrop" class="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal" style="width:min(540px,100%);">
+      <div class="modalHeader">
+        <div class="h">
+          <div class="t">Select booking</div>
+          <div class="s">Multiple bookings match this slot.</div>
+        </div>
+        <button id="closePickModalBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody" id="pickBody"></div>
+      <div class="modalFooter">
+        <div></div>
+        <div class="btnRow">
+          <button id="closePickBtn" type="button" class="primary">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-function b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
-async function sha256(s){ return await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
-function rand(){ const a = new Uint8Array(32); crypto.getRandomValues(a); return b64url(a); }
+  <script>
+    /* ════════════════════════════════════════════════
+       CONFIG  –  Woche 6: TRAGT HIER EURE EIGENEN WERTE EIN.
+       Jede Gruppe hat einen eigenen User Pool. Die Werte
+       findet ihr in der Cognito-Konsole (siehe Lab Aufgabe 1).
+       ════════════════════════════════════════════════ */
+    const API_BASE = "https://f1r84vjqbg.execute-api.us-east-1.amazonaws.com";   // z.B. https://abc123.execute-api.us-east-1.amazonaws.com
 
-async function login(){
-  const verifier = rand();
-  sessionStorage.setItem('pkce_verifier', verifier);
-  const challenge = b64url(await sha256(verifier));
-  const u = new URL(cfg.cognitoDomain + '/oauth2/authorize');
-  u.searchParams.set('response_type', 'code');
-  u.searchParams.set('client_id', cfg.userPoolClientId);
-  u.searchParams.set('redirect_uri', redirectUri);
-  u.searchParams.set('scope', 'openid email');
-  u.searchParams.set('code_challenge', challenge);
-  u.searchParams.set('code_challenge_method', 'S256');
-  window.location = u.toString();
-}
+    const COGNITO = {
+      // Cognito → User Pool → App integration → Domain (NICHT die User Pool ID!)
+      domain:      "https://us-east-1vrbt2tgz5.auth.us-east-1.amazoncognito.com",
+      // Cognito → User Pool → App integration → App clients
+      clientId:    "3ggihleberujbkc7v4qcp19lo",
+      // Eure Amplify-URL, exakt wie als Callback URL im User Pool hinterlegt (mit / am Ende)
+      redirectUri: window.location.origin + "/",
+      scope:       "email openid phone"
+    };
 
-function logout(){
-  sessionStorage.clear();
-  const u = new URL(cfg.cognitoDomain + '/logout');
-  u.searchParams.set('client_id', cfg.userPoolClientId);
-  u.searchParams.set('logout_uri', redirectUri);
-  window.location = u.toString();
-}
+    document.getElementById("apiBaseDisplay").textContent = API_BASE.replace("https://","");
 
-async function exchangeCode(code){
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const body = new URLSearchParams({ grant_type:'authorization_code', client_id:cfg.userPoolClientId, code, redirect_uri:redirectUri, code_verifier:verifier });
-  const r = await fetch(cfg.cognitoDomain + '/oauth2/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-  const t = await r.json();
-  if (t.id_token) sessionStorage.setItem('id_token', t.id_token);
-  history.replaceState({}, '', redirectUri);
-}
+    /* ════════════════════════════════════════════════
+       AUTH  –  Login-Plumbing (vorgegeben, NICHT ändern).
+       Ablauf: kein Token -> Redirect zur Hosted UI ->
+       zurück mit ?code=... -> Code gegen Token tauschen.
+       Das Token (idToken) wird in apiFetch() angehängt.
+       ════════════════════════════════════════════════ */
+    let idToken     = null;   // das ID Token (JWT) des eingeloggten Nutzers
+    let userClaims  = {};     // dekodierte Claims (sub, email, cognito:groups)
 
-function token(){ return sessionStorage.getItem('id_token'); }
+    function decodeJwt(token){
+      try {
+        // base64url -> base64, Padding ergänzen, dann dekodieren.
+        let payload = token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/");
+        while (payload.length % 4) payload += "=";
+        return JSON.parse(atob(payload));
+      } catch { return {}; }
+    }
 
-async function api(path, opts={}){
-  const r = await fetch(cfg.apiEndpoint + path, { ...opts, headers:{ 'Authorization':'Bearer '+token(), 'Content-Type':'application/json', ...(opts.headers||{}) } });
-  return r.json();
-}
+    function redirectToLogin(){
+      const u = `${COGNITO.domain}/login?client_id=${COGNITO.clientId}`
+        + `&response_type=code&scope=${encodeURIComponent(COGNITO.scope)}`
+        + `&redirect_uri=${encodeURIComponent(COGNITO.redirectUri)}`;
+      window.location.href = u;
+    }
 
-async function createBooking(){
-  const body = {
-    startDate: document.getElementById('startDate').value,
-    startSlot: document.getElementById('startSlot').value,
-    endDate: document.getElementById('startDate').value,
-    endSlot: document.getElementById('endSlot').value,
-    deviceIds: document.getElementById('deviceIds').value.split(',').map(s => s.trim()),
-    desc: document.getElementById('desc').value
-  };
-  await api('/bookings', { method:'POST', body: JSON.stringify(body) });
-  loadWeek();
-}
+    async function exchangeCodeForToken(code){
+      const body = new URLSearchParams({
+        grant_type:   "authorization_code",
+        client_id:    COGNITO.clientId,
+        code:         code,
+        redirect_uri: COGNITO.redirectUri
+      });
+      const res = await fetch(`${COGNITO.domain}/oauth2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString()
+      });
+      if(!res.ok) throw new Error("Token-Austausch fehlgeschlagen");
+      return res.json();   // { id_token, access_token, refresh_token, ... }
+    }
 
-async function loadWeek(){
-  const week = document.getElementById('week').value;
-  const items = await api('/bookings?week=' + encodeURIComponent(week));
-  const el = document.getElementById('bookings');
-  el.innerHTML = (Array.isArray(items) && items.length)
-    ? items.map(b => '<div class="card"><b>' + (b.desc||'') + '</b><br>' + b.startDate + ' ' + b.startSlot + ' bis ' + b.endDate + ' ' + b.endSlot + '<br>Geraete: ' + (b.deviceIds||[]).join(', ') + '</div>').join('')
-    : '<p>Keine Buchungen.</p>';
-}
+    // Prüft, ob ein Token noch gültig ist (exp-Claim, in Sekunden seit 1970).
+    function tokenIsValid(token){
+      const claims = decodeJwt(token);
+      if(!claims.exp) return false;
+      // 30 Sekunden Puffer, damit wir nicht knapp vor Ablauf noch durchrutschen.
+      return (claims.exp * 1000) > (Date.now() + 30000);
+    }
 
-function claimsFromToken(){
-  try { return JSON.parse(atob(token().split('.')[1])); } catch(e){ return {}; }
-}
+    // Beim Laden: haben wir ein gültiges Token? Sonst Login-Flow starten.
+    async function ensureAuthenticated(){
+      // 1. Token aus einer früheren Seite dieser Sitzung wiederverwenden (überlebt Refresh).
+      const saved = sessionStorage.getItem("idToken");
+      if(saved && tokenIsValid(saved)){
+        idToken    = saved;
+        userClaims = decodeJwt(idToken);
+        return true;
+      }
+      // Abgelaufenes/ungültiges Token entfernen, damit wir sauber neu einloggen.
+      sessionStorage.removeItem("idToken");
 
-async function init(){
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('code')) await exchangeCode(params.get('code'));
-  if (token()){
-    document.getElementById('login-view').classList.add('hidden');
-    document.getElementById('app-view').classList.remove('hidden');
-    const c = claimsFromToken();
-    document.getElementById('who').textContent = c['cognito:username'] || c.email || 'user';
-    loadWeek();
+      // 2. Kommen wir gerade von der Hosted UI zurück (mit ?code=...)?
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if(code){
+        const tokens = await exchangeCodeForToken(code);
+        idToken    = tokens.id_token;
+        userClaims = decodeJwt(idToken);
+        sessionStorage.setItem("idToken", idToken);   // für Refreshes merken
+        // Code aus der URL entfernen (sauberer, verhindert Re-Use)
+        window.history.replaceState({}, document.title, COGNITO.redirectUri);
+        return true;
+      }
+
+      // 3. Weder gültiges Token noch Code -> zur Login-Seite.
+      redirectToLogin();
+      return false;
+    }
+
+    // Hilfsfunktionen, die der Rest der App nutzen kann:
+    function currentUserName(){ return userClaims.email || userClaims["cognito:username"] || ""; }
+    function currentUserGroups(){
+      const g = userClaims["cognito:groups"];
+      return Array.isArray(g) ? g : (g ? [g] : []);
+    }
+    function isAdmin(){ return currentUserGroups().includes("admin"); }
+
+    /* ════════════════════════════════════════════════
+       API HELPER
+       ════════════════════════════════════════════════ */
+    async function apiFetch(path, options = {}){
+      const res = await fetch(API_BASE + path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + idToken,   // <-- AUFGABE 4, Schritt 5: Token anhängen
+          ...(options.headers || {})
+        },
+      });
+      if (!res.ok){
+        // 401 = Token abgelaufen oder ungültig (Authorizer am Gate). Neu einloggen.
+        // 403 = eingeloggt, aber nicht berechtigt (Lambda). NICHT neu einloggen,
+        //       sondern als Meldung anzeigen (z.B. "nur Ersteller darf löschen").
+        if (res.status === 401){
+          sessionStorage.removeItem("idToken");
+          redirectToLogin();
+          throw { status: 401, message: "Sitzung abgelaufen, bitte neu anmelden." };
+        }
+        const body = await res.json().catch(() => ({}));
+        throw { status: res.status, message: body.message || res.statusText, body };
+      }
+      return res.status === 204 ? null : res.json();
+    }
+
+    /* ════════════════════════════════════════════════
+       IN-MEMORY STATE  –  loaded from API on startup
+       ════════════════════════════════════════════════ */
+    let DEVICES  = [];  // [{ deviceId, name, category, dependsOn[], owners[] }]
+    let BOOKINGS = [];  // [{ bookingId, engineerName, deviceIds[], startDate, startSlot, endDate, endSlot, desc, details, status }]
+
+async function refreshAll(){
+  try {
+    const weekStr = `${weekStart.getFullYear()}-W${pad2(isoWeekNum(weekStart))}`;
+    [DEVICES, BOOKINGS] = await Promise.all([
+      apiFetch("/devices"),
+      apiFetch(`/bookings?week=${weekStr}`),
+    ]);
+    apiDot.style.background = "rgba(40,200,120,.85)";
+    apiText.textContent = "Connected";
+  } catch {
+    apiDot.style.background = "rgba(255,90,90,.85)";
+    apiText.textContent = "Unreachable";
   }
+  renderAll();
 }
-init();
-</script>
+
+    /* ════════════════════════════════════════════════
+       DATE HELPERS
+       ════════════════════════════════════════════════ */
+    const pad2 = n => String(n).padStart(2, "0");
+    function startOfISOWeek(d){ const date = new Date(d); const day = (date.getDay()+6)%7; date.setHours(0,0,0,0); date.setDate(date.getDate()-day); return date; }
+    function addDays(d, n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+    function addWeeks(d, n){ return addDays(d, n*7); }
+    function fmtISO(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+    function fmtDMY(d){ return `${pad2(d.getDate())}.${pad2(d.getMonth()+1)}.${d.getFullYear()}`; }
+    function fmtDMYFromISO(s){ const [y,m,dd]=s.split("-").map(Number); return `${pad2(dd)}.${pad2(m)}.${y}`; }
+    function parseISO(s){ return new Date(s+"T00:00:00"); }
+    function isoWeekNum(d){ const date=new Date(d); date.setHours(0,0,0,0); date.setDate(date.getDate()+3-((date.getDay()+6)%7)); const w1=new Date(date.getFullYear(),0,4); return 1+Math.round(((date-w1)/86400000-3+((w1.getDay()+6)%7))/7); }
+
+    /* ════════════════════════════════════════════════
+       SLOT COVERAGE
+       ════════════════════════════════════════════════ */
+    function slotsCovered(entry, dateStr){
+      const day=parseISO(dateStr), start=parseISO(entry.startDate), end=parseISO(entry.endDate);
+      if(day<start||day>end) return {am:false,pm:false};
+      const sameDay = entry.startDate===entry.endDate;
+      if(!sameDay&&day>start&&day<end) return {am:true,pm:true};
+      if(!sameDay&&day.getTime()===start.getTime()) return entry.startSlot==="am"?{am:true,pm:true}:{am:false,pm:true};
+      if(!sameDay&&day.getTime()===end.getTime())   return entry.endSlot==="pm"  ?{am:true,pm:true}:{am:true,pm:false};
+      if(sameDay){
+        const s=entry.startSlot,e=entry.endSlot;
+        if(s==="pm"&&e==="am") return {am:false,pm:false};
+        if(s==="am"&&e==="am") return {am:true,pm:false};
+        if(s==="pm"&&e==="pm") return {am:false,pm:true};
+        return {am:true,pm:true};
+      }
+      return {am:false,pm:false};
+    }
+
+    /* ════════════════════════════════════════════════
+       DISPLAY HELPERS
+       ════════════════════════════════════════════════ */
+    const STATUS_CSS = { confirmed:"st-confirmed", in_progress:"st-in-progress", completed:"st-completed", cancelled:"st-cancelled" };
+    const STATUS_LABEL = { confirmed:"Confirmed", in_progress:"In progress", completed:"Completed", cancelled:"Cancelled" };
+    function statusCss(s)   { return STATUS_CSS[s]   || STATUS_CSS.confirmed; }
+    function statusLabel(s) { return STATUS_LABEL[s] || "Confirmed"; }
+
+    function deviceName(id){ const d=DEVICES.find(x=>x.deviceId===id||x.name===id); return d?(d.name||id):id; }
+
+    function bookingTitle(b){
+      const devs = (b.deviceIds||b.devices||[]).map(deviceName).join(", ") || "—";
+      return `${b.engineerName||"?"} — ${b.desc||"(no name)"} — ${devs}`;
+    }
+
+    function escape(str){ return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+    function normalize(s){ return String(s||"").trim().replace(/\s+/g," "); }
+    function sortStrings(arr){ return [...arr].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})); }
+
+
+
+    /* ════════════════════════════════════════════════
+       API STATUS
+       ════════════════════════════════════════════════ */
+    const apiDot  = document.getElementById("apiStatusDot");
+    const apiText = document.getElementById("apiStatusText");
+
+    /* ════════════════════════════════════════════════
+       WEEK STATE
+       ════════════════════════════════════════════════ */
+    const todayStr = fmtISO(new Date());
+    let weekStart  = startOfISOWeek(new Date());
+
+    /* ════════════════════════════════════════════════
+       VIEW STATE
+       ════════════════════════════════════════════════ */
+    const weekHost      = document.getElementById("weekHost");
+    const resourcesHost = document.getElementById("resourcesHost");
+    const swapViewBtn   = document.getElementById("swapViewBtn");
+    const swapViewText  = document.getElementById("swapViewText");
+    const pageTitle     = document.querySelector(".title h1");
+    let currentView     = "weekly";
+
+    function applyView(){
+      if(currentView==="weekly"){
+        weekHost.style.display      = "";
+        resourcesHost.style.display = "none";
+        swapViewText.textContent    = "Resources overview";
+        pageTitle.textContent       = "Weekly Overview";
+      } else {
+        weekHost.style.display      = "none";
+        resourcesHost.style.display = "";
+        swapViewText.textContent    = "Weekly overview";
+        pageTitle.textContent       = "Resources Overview";
+      }
+    }
+
+    swapViewBtn.addEventListener("click", ()=>{
+      currentView = currentView==="weekly" ? "resources" : "weekly";
+      applyView();
+      renderAll();
+    });
+
+    /* ════════════════════════════════════════════════
+       WEEKLY VIEW RENDER
+       ════════════════════════════════════════════════ */
+    function renderWeekly(){
+      weekHost.innerHTML = "";
+
+      const wkNum    = isoWeekNum(weekStart);
+      const startISO = fmtISO(weekStart);
+      const endISO   = fmtISO(addDays(weekStart,6));
+
+      const weekEl = document.createElement("section");
+      weekEl.className = "week";
+
+      const header = document.createElement("div");
+      header.className = "weekHeader";
+      const left = document.createElement("div");
+      left.style.cssText = "display:flex;flex-direction:column;gap:1px;";
+      const wkEl = document.createElement("div"); wkEl.className="wk"; wkEl.textContent=`Week ${wkNum}`;
+      const rangeEl = document.createElement("div"); rangeEl.className="range"; rangeEl.textContent=`${fmtDMYFromISO(startISO)} – ${fmtDMYFromISO(endISO)}`;
+      left.appendChild(wkEl); left.appendChild(rangeEl);
+      const right = document.createElement("div"); right.className="right"; right.textContent="Mon → Sun";
+      header.appendChild(left); header.appendChild(right);
+
+      const daysGrid = document.createElement("div");
+      daysGrid.className = "days";
+
+      async function cancelBooking(id){
+        const b = BOOKINGS.find(x=>(x.bookingId||x.id)===id);
+        const week = b ? b.calendarWeek : "";
+        try { await apiFetch(`/bookings/${id}?week=${week}`,{method:"DELETE"}); await refreshAll(); }
+        catch(err){ alert(err.message||"Could not cancel booking."); }
+      }
+
+      function makeCard(b){
+        const card = document.createElement("div");
+        card.className = `item ${statusCss(b.status)}`;
+        card.title = `${fmtDMYFromISO(b.startDate)} → ${fmtDMYFromISO(b.endDate)}`;
+
+        const main = document.createElement("div"); main.className="itemMain";
+        const desc = document.createElement("div"); desc.className="itemDesc";
+        desc.textContent = bookingTitle(b);
+        main.appendChild(desc);
+
+        const actions = document.createElement("div"); actions.className="itemActions";
+        const del = document.createElement("button"); del.type="button"; del.className="miniDel"; del.title="Cancel"; del.textContent="✕";
+        del.addEventListener("click", ev=>{ ev.stopPropagation(); if(confirm("Cancel this booking?")) cancelBooking(b.bookingId||b.id); });
+        actions.appendChild(del);
+
+        card.appendChild(main); card.appendChild(actions);
+        card.addEventListener("click", ()=>openViewModal(b.bookingId||b.id));
+        return card;
+      }
+
+      function makeSlotItems(dateISO, slot){
+        const wrap = document.createElement("div"); wrap.className="items";
+        const matches = BOOKINGS
+          .filter(b=>{ const c=slotsCovered(b,dateISO); return slot==="am"?c.am:c.pm; })
+          .sort((a,b2)=>a.startDate.localeCompare(b2.startDate));
+        if(!matches.length){ const e=document.createElement("div"); e.className="empty"; e.textContent="No entries"; wrap.appendChild(e); return wrap; }
+        matches.forEach(b=>wrap.appendChild(makeCard(b)));
+        return wrap;
+      }
+
+      function makeBlock(dateISO, slot, labelTxt, timeTxt, extraClass){
+        const wrap = document.createElement("div"); wrap.className=`block${extraClass?" "+extraClass:""}`;
+        const head = document.createElement("div"); head.className="blockHeader";
+        const lbl  = document.createElement("div"); lbl.className="blabel"; lbl.textContent=labelTxt;
+        const tim  = document.createElement("div"); tim.className="btime";  tim.textContent=timeTxt;
+        head.appendChild(lbl); head.appendChild(tim);
+        wrap.appendChild(head); wrap.appendChild(makeSlotItems(dateISO, slot));
+        return wrap;
+      }
+
+      Array.from({length:7},(_,i)=>addDays(weekStart,i)).forEach(dayDate=>{
+        const iso     = fmtISO(dayDate);
+        const isToday = iso===todayStr;
+
+        const day = document.createElement("article");
+        day.className = "day" + (isToday?" today":"");
+
+        const top = document.createElement("div"); top.className="dayTop";
+        const dw  = document.createElement("div"); dw.className="dowWrap";
+        const badge = document.createElement("div"); badge.className="todayBadge"; badge.textContent="Today";
+        const dowEl  = document.createElement("div"); dowEl.className="dow"; dowEl.textContent=dayDate.toLocaleDateString(undefined,{weekday:"short"});
+        dw.appendChild(badge); dw.appendChild(dowEl);
+        const dateEl = document.createElement("div"); dateEl.className="date"; dateEl.textContent=fmtDMY(dayDate);
+        top.appendChild(dw); top.appendChild(dateEl);
+
+        const blocks = document.createElement("div"); blocks.className="blocks";
+        blocks.appendChild(makeBlock(iso,"am","AM","08:00–12:00",""));
+        const pause = document.createElement("div"); pause.className="pause";
+        pause.innerHTML=`<span class="pline"></span><span class="ptxt">Pause 12:00–13:00</span><span class="pline"></span>`;
+        blocks.appendChild(pause);
+        blocks.appendChild(makeBlock(iso,"pm","PM","13:00–17:00","pm"));
+
+        day.appendChild(top); day.appendChild(blocks);
+        daysGrid.appendChild(day);
+      });
+
+      weekEl.appendChild(header); weekEl.appendChild(daysGrid);
+      weekHost.appendChild(weekEl);
+    }
+
+    /* ════════════════════════════════════════════════
+       RENDER ALL
+       ════════════════════════════════════════════════ */
+    function renderAll(){
+      renderWeekly();
+      renderMatrix();
+      applyView();
+    }
+
+    /* ════════════════════════════════════════════════
+       MATRIX RENDER
+       ════════════════════════════════════════════════ */
+
+    function hashIdx(name){ let h=0; for(let i=0;i<name.length;i++) h=(h*33+name.charCodeAt(i))>>>0; return h%8; }
+    function groupRowClass(grp, idx){ return `group${idx%2===0?"A":"B"}${hashIdx(grp)}`; }
+
+    function bookingsForCell(deviceId, dateISO, slot){
+      return BOOKINGS.filter(b => {
+        const cov = slotsCovered(b, dateISO);
+        if(!(slot==="am" ? cov.am : cov.pm)) return false;
+        return (b.deviceIds||b.devices||[]).some(id => id===deviceId || deviceName(id)===deviceId);
+      });
+    }
+
+    function setStickyOffsets(table){
+      if(!table?.tHead?.rows?.[0]) return;
+      table.style.setProperty("--theadRow1H", Math.ceil(table.tHead.rows[0].getBoundingClientRect().height)+"px");
+      table.style.setProperty("--theadRow2H", Math.ceil(table.tHead.rows[1].getBoundingClientRect().height)+"px");
+    }
+
+    function renderMatrix(){
+      resourcesHost.innerHTML = "";
+
+      const wrap = document.createElement("section");
+      wrap.className = "resourcesWrap";
+
+      const scroll = document.createElement("div");
+      scroll.className = "matrixScroll";
+
+      const table = document.createElement("table");
+      table.className = "matrix";
+
+      /* colgroup */
+      const cg = document.createElement("colgroup");
+      [{ w:"var(--resCatW)" },{ w:"var(--resNameW)" },...Array(14).fill({ w:"var(--resSlotW)" })].forEach(({w})=>{ const c=document.createElement("col"); c.style.width=w; cg.appendChild(c); });
+      table.appendChild(cg);
+
+      /* thead */
+      const thead = document.createElement("thead");
+      const tr1 = document.createElement("tr");
+      const tr2 = document.createElement("tr");
+
+      function stickyTh(cls, text, row){ const th=document.createElement("th"); th.className=cls; th.textContent=text; row.appendChild(th); return th; }
+      stickyTh("stickyColA","",tr1); stickyTh("stickyColB","",tr1);
+      stickyTh("stickyColA","Category",tr2); stickyTh("stickyColB","Device",tr2);
+
+      const weekDates = Array.from({length:7},(_,i)=>addDays(weekStart,i));
+      weekDates.forEach(d => {
+        const iso = fmtISO(d);
+        const dow = d.toLocaleDateString(undefined,{weekday:"short"});
+        const isToday = iso===todayStr;
+
+        const th = document.createElement("th");
+        th.className = "dayHead" + (isToday?" todayCol":"");
+        th.colSpan = 2;
+        if(isToday){
+          th.innerHTML = `<div class="dayHeadWrap"><div class="todayInHeader">Today</div><div>${escape(dow)} ${escape(fmtDMY(d))}</div></div>`;
+        } else {
+          th.textContent = `${dow} ${fmtDMY(d)}`;
+        }
+        tr1.appendChild(th);
+
+        ["AM","PM"].forEach(s => {
+          const th2 = document.createElement("th");
+          th2.className = "slotHead" + (isToday?" todayCol":"");
+          th2.textContent = s;
+          tr2.appendChild(th2);
+        });
+      });
+
+      thead.appendChild(tr1); thead.appendChild(tr2);
+      table.appendChild(thead);
+
+      /* tbody */
+      const tbody = document.createElement("tbody");
+      const cats  = sortStrings([...new Set(DEVICES.map(d=>d.category||"Other"))]);
+      const sorted = DEVICES.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+
+      cats.forEach(cat => {
+        const group = sorted.filter(d=>(d.category||"Other")===cat);
+        if(!group.length) return;
+
+        group.forEach((device, idx) => {
+          const devId   = device.deviceId;
+          const devName = device.name || devId;
+          const tr = document.createElement("tr");
+          tr.className = groupRowClass(cat, idx);
+
+          if(idx===0){
+            const tdCat = document.createElement("td");
+            tdCat.className = "stickyColA";
+            tdCat.rowSpan = group.length;
+            tdCat.innerHTML = `<span class="pill">${escape(cat)}</span>`;
+            tr.appendChild(tdCat);
+          }
+
+          const tdName = document.createElement("td");
+          tdName.className = "stickyColB";
+          tdName.textContent = devName;
+          tr.appendChild(tdName);
+
+          weekDates.forEach(d => {
+            const iso = fmtISO(d);
+            const isToday = iso===todayStr;
+
+            ["am","pm"].forEach(slot => {
+              const td = document.createElement("td");
+              td.className = "cell" + (isToday?" todayCol":"");
+              td.dataset.date  = iso;
+              td.dataset.slot  = slot;
+              td.dataset.devId = devId;
+
+              const matches = bookingsForCell(devId, iso, slot)
+                .sort((a,b)=>a.startDate.localeCompare(b.startDate));
+
+              if(matches.length){
+                td.dataset.bookingIds = matches.map(b=>b.bookingId||b.id).join(",");
+                const stack = document.createElement("div");
+                stack.className = "cellStack";
+                matches.slice(0,2).forEach(b => {
+                  const chip = document.createElement("div");
+                  chip.className = `cellEntry ${statusCss(b.status)}`;
+                  chip.textContent = bookingTitle(b);
+                  chip.title = `${fmtDMYFromISO(b.startDate)} → ${fmtDMYFromISO(b.endDate)}`;
+                  stack.appendChild(chip);
+                });
+                if(matches.length>2){
+                  const more = document.createElement("div");
+                  more.className = "cellMore";
+                  more.textContent = `+${matches.length-2} more…`;
+                  stack.appendChild(more);
+                }
+                td.appendChild(stack);
+              }
+              tr.appendChild(td);
+            });
+          });
+          tbody.appendChild(tr);
+        });
+      });
+
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      wrap.appendChild(scroll);
+      resourcesHost.appendChild(wrap);
+
+      setStickyOffsets(table);
+      requestAnimationFrame(() => setStickyOffsets(table));
+    }
+
+    /* ════════════════════════════════════════════════
+       MATRIX CLICK → open pick or view modal
+       ════════════════════════════════════════════════ */
+    resourcesHost.addEventListener("click", e => {
+      const td = e.target.closest("td.cell");
+      if(!td) return;
+      const raw = td.dataset.bookingIds||"";
+      const ids = raw.split(",").map(s=>s.trim()).filter(Boolean);
+      if(!ids.length) return;
+      const iso  = td.dataset.date;
+      const slot = (td.dataset.slot||"").toUpperCase();
+      const dev  = deviceName(td.dataset.devId);
+      if(ids.length===1) openViewModal(ids[0]);
+      else openPickModal(ids, `${dev} • ${fmtDMYFromISO(iso)} • ${slot}`);
+    });
+
+    /* ════════════════════════════════════════════════
+       VIEW MODAL
+       ════════════════════════════════════════════════ */
+    const viewModalBackdrop = document.getElementById("viewModalBackdrop");
+    const viewBody          = document.getElementById("viewBody");
+    let activeBookingId     = null;
+
+    document.getElementById("closeViewModalBtn").addEventListener("click",()=>viewModalBackdrop.classList.remove("show"));
+    document.getElementById("closeViewBtn").addEventListener("click",()=>viewModalBackdrop.classList.remove("show"));
+    viewModalBackdrop.addEventListener("click",e=>{ if(e.target===viewModalBackdrop) viewModalBackdrop.classList.remove("show"); });
+
+    function openViewModal(bookingId){
+      const b = BOOKINGS.find(x=>(x.bookingId||x.id)===bookingId);
+      if(!b) return;
+      activeBookingId = bookingId;
+
+      const devNames = (b.deviceIds||b.devices||[]).map(deviceName).join(", ")||"—";
+      viewBody.innerHTML = `
+        <div class="pickerBox">
+          <div class="pickerTitle">Test name</div>
+          <div style="font-size:13px;">${escape(b.desc||"—")}</div>
+        </div>
+        ${b.details ? `<div class="pickerBox"><div class="pickerTitle">Notes</div><div style="white-space:pre-wrap;line-height:1.4;font-size:12px;">${escape(b.details)}</div></div>` : ""}
+        <div class="row">
+          <div class="pickerBox">
+            <div class="pickerTitle">Dates</div>
+            <div style="font-size:12px;">${escape(fmtDMYFromISO(b.startDate))} ${b.startSlot?.toUpperCase()} → ${escape(fmtDMYFromISO(b.endDate))} ${b.endSlot?.toUpperCase()}</div>
+          </div>
+          <div class="pickerBox">
+            <div class="pickerTitle">Status</div>
+            <div style="font-size:12px;">${escape(statusLabel(b.status))}</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="pickerBox">
+            <div class="pickerTitle">Devices</div>
+            <div style="font-size:12px;">${escape(devNames)}</div>
+          </div>
+          <div class="pickerBox">
+            <div class="pickerTitle">Booked by</div>
+            <div style="font-size:12px;">${escape(b.engineerName||"—")}</div>
+          </div>
+        </div>
+      `;
+      viewModalBackdrop.classList.add("show");
+    }
+
+    document.getElementById("editFromViewBtn").addEventListener("click",()=>{
+      const id = activeBookingId;
+      viewModalBackdrop.classList.remove("show");
+      if(id) openEntryModalForEdit(id);
+    });
+
+    /* ════════════════════════════════════════════════
+       PICK MODAL
+       ════════════════════════════════════════════════ */
+    const pickModalBackdrop = document.getElementById("pickModalBackdrop");
+    const pickBody          = document.getElementById("pickBody");
+
+    document.getElementById("closePickModalBtn").addEventListener("click",()=>pickModalBackdrop.classList.remove("show"));
+    document.getElementById("closePickBtn").addEventListener("click",()=>pickModalBackdrop.classList.remove("show"));
+    pickModalBackdrop.addEventListener("click",e=>{ if(e.target===pickModalBackdrop) pickModalBackdrop.classList.remove("show"); });
+
+    function openPickModal(ids, context){
+      const items = BOOKINGS.filter(b=>ids.includes(b.bookingId||b.id));
+      pickBody.innerHTML = `<div class="pickerBox"><div class="pickerTitle">${escape(context)}</div></div>`;
+      const list = document.createElement("div");
+      list.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+      items.forEach(b => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.style.justifyContent = "flex-start";
+        btn.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escape(bookingTitle(b))}</span><span class="keyHint" style="margin-left:auto;">${escape(fmtDMYFromISO(b.startDate))} → ${escape(fmtDMYFromISO(b.endDate))}</span>`;
+        btn.addEventListener("click",()=>{ pickModalBackdrop.classList.remove("show"); openViewModal(b.bookingId||b.id); });
+        list.appendChild(btn);
+      });
+      pickBody.appendChild(list);
+      pickModalBackdrop.classList.add("show");
+    }
+
+    /* ════════════════════════════════════════════════
+       BOOK / EDIT MODAL
+       ════════════════════════════════════════════════ */
+    const entryModalBackdrop = document.getElementById("entryModalBackdrop");
+    const entryModalTitle    = document.getElementById("entryModalTitle");
+    const entryModalSub      = document.getElementById("entryModalSub");
+    const engineerNameInput  = document.getElementById("engineerNameInput");
+    const descInput          = document.getElementById("descInput");
+    const detailsInput       = document.getElementById("detailsInput");
+    const startDateInput     = document.getElementById("startDateInput");
+    const endDateInput       = document.getElementById("endDateInput");
+    const deviceFilterInput  = document.getElementById("deviceFilterInput");
+    const devicePickWrap     = document.getElementById("devicePickWrap");
+    const deviceTokenWrap    = document.getElementById("deviceTokenWrap");
+    const saveEntryBtn       = document.getElementById("saveEntryBtn");
+    const deleteEntryBtn     = document.getElementById("deleteEntryBtn");
+    const entryErrMsg        = document.getElementById("entryErrMsg");
+    const conflictBox        = document.getElementById("conflictBox");
+    const conflictMsg        = document.getElementById("conflictMsg");
+
+    let editBookingId    = null;
+    let selectedDevices  = [];  // array of deviceId strings
+
+    function radioVal(name){ const el=document.querySelector(`input[name="${name}"]:checked`); return el?el.value:null; }
+    function setRadio(name,val){ document.querySelectorAll(`input[name="${name}"]`).forEach(r=>r.checked=r.value===val); }
+
+    function buildDeviceItems(){
+      return DEVICES.map(d=>({ deviceId:d.deviceId, name:d.name||d.deviceId, category:d.category||"Other", label:(d.category?`${d.name} (${d.category})`:d.name), search:`${d.name} ${d.category||""}`.toLowerCase() }))
+        .sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+    }
+
+    function renderDevicePicker(filter){
+      const q = normalize(filter).toLowerCase();
+      const items = buildDeviceItems().filter(d=>!q||d.search.includes(q)).slice(0,30);
+      devicePickWrap.innerHTML = "";
+      if(!items.length){ devicePickWrap.innerHTML=`<div style="color:var(--muted);font-size:12px;font-weight:900;">No matches</div>`; return; }
+      const list = document.createElement("div");
+      list.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+      items.forEach(d=>{
+        const b = document.createElement("button");
+        b.type="button"; b.style.justifyContent="flex-start"; b.textContent=d.label;
+        b.addEventListener("click",()=>{ if(!selectedDevices.includes(d.deviceId)) selectedDevices.push(d.deviceId); renderTokens(); });
+        list.appendChild(b);
+      });
+      devicePickWrap.appendChild(list);
+    }
+
+    function renderTokens(){
+      deviceTokenWrap.innerHTML = "";
+      selectedDevices.forEach(id=>{
+        const t = document.createElement("div");
+        t.className="token on"; t.textContent=deviceName(id)+" ✕";
+        t.addEventListener("click",()=>{ selectedDevices=selectedDevices.filter(x=>x!==id); renderTokens(); });
+        deviceTokenWrap.appendChild(t);
+      });
+    }
+
+    function showConflict(msg){ conflictMsg.textContent=msg; conflictBox.style.display=""; }
+    function hideConflict()   { conflictMsg.textContent=""; conflictBox.style.display="none"; }
+
+    function openEntryModalForNew(){
+      editBookingId = null;
+      entryModalTitle.textContent = "Book a test slot";
+      entryModalSub.textContent   = "Conflicts are checked automatically against the device dependency graph.";
+      deleteEntryBtn.style.display = "none";
+      entryErrMsg.textContent = ""; hideConflict();
+      engineerNameInput.value = currentUserName();   // aus dem Token, nicht frei wählbar
+      engineerNameInput.readOnly = true;
+      descInput.value = ""; detailsInput.value = "";
+      startDateInput.value = todayStr; endDateInput.value = todayStr;
+      setRadio("startSlot","am"); setRadio("endSlot","pm");
+      selectedDevices = []; deviceFilterInput.value = "";
+      renderTokens(); renderDevicePicker("");
+      entryModalBackdrop.classList.add("show");
+    }
+
+    function openEntryModalForEdit(bookingId){
+      const b = BOOKINGS.find(x=>(x.bookingId||x.id)===bookingId);
+      if(!b) return;
+      editBookingId = bookingId;
+      entryModalTitle.textContent = "Edit booking";
+      entryModalSub.textContent   = "Modify details and save.";
+      deleteEntryBtn.style.display = "";
+      entryErrMsg.textContent = ""; hideConflict();
+      engineerNameInput.value = b.engineerName||"";
+      descInput.value    = b.desc||"";
+      detailsInput.value = b.details||"";
+      startDateInput.value = b.startDate; endDateInput.value = b.endDate;
+      setRadio("startSlot", b.startSlot||"am"); setRadio("endSlot", b.endSlot||"pm");
+      selectedDevices = (b.deviceIds||b.devices||[]).slice();
+      deviceFilterInput.value = "";
+      renderTokens(); renderDevicePicker("");
+      entryModalBackdrop.classList.add("show");
+    }
+
+    function closeEntryModal(){ entryModalBackdrop.classList.remove("show"); editBookingId=null; hideConflict(); }
+
+    document.getElementById("closeEntryModalBtn").addEventListener("click", closeEntryModal);
+    document.getElementById("cancelEntryBtn").addEventListener("click", closeEntryModal);
+    entryModalBackdrop.addEventListener("click", e=>{ if(e.target===entryModalBackdrop) closeEntryModal(); });
+    document.getElementById("addEntryBtn").addEventListener("click", openEntryModalForNew);
+
+    deviceFilterInput.addEventListener("input", ()=>renderDevicePicker(deviceFilterInput.value));
+
+    document.getElementById("addDeviceToSelectionBtn").addEventListener("click",()=>{
+      const q = normalize(deviceFilterInput.value).toLowerCase();
+      if(!q) return;
+      const match = buildDeviceItems().find(d=>d.name.toLowerCase()===q||d.label.toLowerCase()===q);
+      if(match&&!selectedDevices.includes(match.deviceId)) selectedDevices.push(match.deviceId);
+      renderTokens();
+    });
+
+    saveEntryBtn.addEventListener("click", async ()=>{
+      entryErrMsg.textContent = ""; hideConflict();
+      const engineerName = normalize(engineerNameInput.value);
+      const desc         = normalize(descInput.value);
+      const details      = String(detailsInput.value||"");
+      const startDate    = startDateInput.value;
+      const endDate      = endDateInput.value;
+      const startSlot    = radioVal("startSlot");
+      const endSlot      = radioVal("endSlot");
+
+      if(!engineerName)               { entryErrMsg.textContent="Please enter your name."; return; }
+      if(!desc)                       { entryErrMsg.textContent="Please enter a test name."; return; }
+      if(!startDate||!endDate)        { entryErrMsg.textContent="Please select start and end dates."; return; }
+      if(parseISO(endDate)<parseISO(startDate)) { entryErrMsg.textContent="End date must be on or after start date."; return; }
+      if(!startSlot||!endSlot)        { entryErrMsg.textContent="Please select start and end slots."; return; }
+      if(!selectedDevices.length && DEVICES.length > 0) { entryErrMsg.textContent="Please select at least one device."; return; }
+
+      saveEntryBtn.disabled=true; saveEntryBtn.textContent="Saving…";
+
+      const payload = { engineerName, desc, details, startDate, endDate, startSlot, endSlot, deviceIds: selectedDevices };
+
+      try {
+        if(editBookingId){
+          await apiFetch(`/bookings/${editBookingId}`,{ method:"PUT", body:JSON.stringify(payload) });
+        } else {
+          await apiFetch("/bookings",{ method:"POST", body:JSON.stringify(payload) });
+        }
+        closeEntryModal();
+        await refreshAll();
+      } catch(err){
+        if(err.status===409) showConflict(err.body?.conflictDetail||err.message||"Conflict detected.");
+        else entryErrMsg.textContent = err.message||"Save failed. Please try again.";
+      } finally {
+        saveEntryBtn.disabled=false; saveEntryBtn.textContent="Save";
+      }
+    });
+
+    deleteEntryBtn.addEventListener("click", async ()=>{
+      if(!editBookingId) return;
+      if(!confirm("Cancel this booking?")) return;
+      const b = BOOKINGS.find(x=>(x.bookingId||x.id)===editBookingId);
+      const week = b ? b.calendarWeek : "";
+      deleteEntryBtn.disabled=true; deleteEntryBtn.textContent="Cancelling…";
+      try {
+        await apiFetch(`/bookings/${editBookingId}?week=${week}`,{ method:"DELETE" });
+        closeEntryModal();
+        await refreshAll();
+      } catch(err){
+        entryErrMsg.textContent = err.message||"Delete failed.";
+      } finally {
+        deleteEntryBtn.disabled=false; deleteEntryBtn.textContent="Cancel booking";
+      }
+    });
+
+    /* ════════════════════════════════════════════════
+       WEEK NAVIGATION
+       ════════════════════════════════════════════════ */
+    document.getElementById("prevWeekBtn").addEventListener("click",()=>{ weekStart=addWeeks(weekStart,-1); refreshAll(); });
+    document.getElementById("nextWeekBtn").addEventListener("click",()=>{ weekStart=addWeeks(weekStart,1);  refreshAll(); });
+    document.getElementById("todayBtn").addEventListener("click",()=>   { weekStart=startOfISOWeek(new Date()); refreshAll(); });
+
+    window.addEventListener("resize",()=>{
+      const t = resourcesHost.querySelector("table.matrix");
+      if(t) setStickyOffsets(t);
+    });
+
+    /* ════════════════════════════════════════════════
+       KEYBOARD SHORTCUTS
+       ════════════════════════════════════════════════ */
+    document.addEventListener("keydown", e=>{
+      if(e.target.matches("input,textarea,select")) return;
+      if(e.key==="a"||e.key==="A") openEntryModalForNew();
+      if(e.key==="r"||e.key==="R") swapViewBtn.click();
+    });
+
+    /* ════════════════════════════════════════════════
+       INIT  –  zuerst einloggen, dann App starten
+       ════════════════════════════════════════════════ */
+    (async function init(){
+      const ok = await ensureAuthenticated();
+      if(!ok) return;        // Redirect zur Login-Seite läuft bereits
+      applyView();
+      refreshAll();
+    })();
+  </script>
 </body>
 </html>
