@@ -5,7 +5,8 @@ Description: NetLab Scheduler - Woche 7 - STARTER
 Globals:
   Function:
     # TODO 1: Setzt Runtime (python3.14) und Timeout (10) einmal global.
-
+    MemorySize: 128
+ 
 Resources:
 
   SchedulerFunction:
