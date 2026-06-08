@@ -1,13 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: NetLab Scheduler - Woche 7 - LÖSUNG
+Description: NetLab Scheduler - Woche 7 - STARTER
 
 Globals:
   Function:
-    Runtime: python3.12
-    Timeout: 10
+    # TODO 1: Setzt Runtime (python3.14) und Timeout (10) einmal global.
     MemorySize: 128
-
+ 
 Resources:
 
   SchedulerFunction:
@@ -15,38 +14,26 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
-      Role: !Sub "arn:aws:iam::${AWS::AccountId}:role/LabRole"
+      # TODO 2: Verweist mit Role direkt auf die vorhandene LabRole.
+      #         ARN mit !Sub und ${AWS::AccountId} bauen. KEIN Policies-Block!
       Environment:
         Variables:
-          TABLE_NAME: !Ref BookingsTable
+          # TODO 3: Setzt TABLE_NAME auf den Namen der Tabelle. Tipp: !Ref BookingsTable
       Events:
         DefaultRoute:
           Type: HttpApi
           Properties:
             ApiId: !Ref SchedulerApi
-        OptionsRoute:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref SchedulerApi
-            Method: OPTIONS
-            Path: /{proxy+}
-            Auth:
-              Authorizer: NONE
+        # TODO 4: Ergaenzt eine OPTIONS /{proxy+}-Route OHNE Authorizer
+        #         (Auth: { Authorizer: NONE }), damit der CORS-Preflight durchkommt.
 
+  # TODO 5: Definiert die DynamoDB-Tabelle als AWS::DynamoDB::Table mit
+  #         calendarWeek als HASH und bookingId als RANGE (beide Typ S),
+  #         BillingMode PAY_PER_REQUEST. Frage: Warum keine SimpleTable?
   BookingsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      AttributeDefinitions:
-        - AttributeName: calendarWeek
-          AttributeType: S
-        - AttributeName: bookingId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: calendarWeek
-          KeyType: HASH
-        - AttributeName: bookingId
-          KeyType: RANGE
-      BillingMode: PAY_PER_REQUEST
+      # ... ausfuellen ...
 
   SchedulerApi:
     Type: AWS::Serverless::HttpApi
@@ -61,6 +48,9 @@ Resources:
                 - !Ref UserPoolClient
         DefaultAuthorizer: CognitoAuthorizer
 
+  # ==== GEGEBEN: Frontend-Hosting (Amplify) ==============================
+  # Kein Repository, kein GitHub-Token. Die Pipeline pusht die Dateien per CLI.
+  # Die App existiert nach sam deploy mit einer festen URL.
   FrontendApp:
     Type: AWS::Amplify::App
     Properties:
@@ -73,6 +63,7 @@ Resources:
       AppId: !GetAtt FrontendApp.AppId
       BranchName: main
 
+  # ==== GEGEBEN: Cognito =================================================
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -108,12 +99,12 @@ Resources:
       AllowedOAuthFlowsUserPoolClient: true
       SupportedIdentityProviders:
         - COGNITO
+      # Callback wird aus der Amplify-App abgeleitet (.AppId, NICHT der ARN).
+      # Kein localhost, keine zweite Deploy-Phase.
       CallbackURLs:
         - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
-        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com/"
       LogoutURLs:
         - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
-        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com/"
 
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -130,7 +121,7 @@ Resources:
       MessageAction: SUPPRESS
       UserAttributes:
         - Name: email
-          Value: thomas@netlab.local
+          Value: thomas@teko.ch
         - Name: email_verified
           Value: "true"
 
@@ -142,7 +133,7 @@ Resources:
       MessageAction: SUPPRESS
       UserAttributes:
         - Name: email
-          Value: maria@netlab.local
+          Value: maria@teko.ch
         - Name: email_verified
           Value: "true"
 
