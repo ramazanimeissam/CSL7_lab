@@ -103,8 +103,10 @@ Resources:
       # Kein localhost, keine zweite Deploy-Phase.
       CallbackURLs:
         - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
+        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com/"
       LogoutURLs:
         - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com"
+        - !Sub "https://main.${FrontendApp.AppId}.amplifyapp.com/"
 
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
