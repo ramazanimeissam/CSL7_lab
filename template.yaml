@@ -121,7 +121,7 @@ Resources:
       MessageAction: SUPPRESS
       UserAttributes:
         - Name: email
-          Value: thomas@netlab.local
+          Value: thomas@teko.ch
         - Name: email_verified
           Value: "true"
 
@@ -133,7 +133,7 @@ Resources:
       MessageAction: SUPPRESS
       UserAttributes:
         - Name: email
-          Value: maria@netlab.local
+          Value: maria@teko.ch
         - Name: email_verified
           Value: "true"
 
